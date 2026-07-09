@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
-from app.models import PlatformPost, PostAnalytics, Product
+from app.models import PlatformPost, PostAnalytics, Product, PublishAttempt
 from app.services.publishers.pinterest import PinterestPublisher, PinterestPublishError
 
 
@@ -64,23 +65,31 @@ class FakePinterestSession:
         self.product = product
         self.commits = 0
         self.analytics: list[PostAnalytics] = []
+        self.attempts: dict[str, PublishAttempt] = {}
 
-    async def get(self, model: type[object], entity_id: int) -> object | None:
+    async def get(self, model: type[object], entity_id: object) -> object | None:
         if model is PlatformPost and entity_id == self.post.id:
             return self.post
         if model is Product and entity_id == self.product.id:
             return self.product
+        if model is PublishAttempt and isinstance(entity_id, str):
+            return self.attempts.get(entity_id)
 
         return None
 
     def add(self, model: object) -> None:
         if isinstance(model, PostAnalytics):
             self.analytics.append(model)
+        if isinstance(model, PublishAttempt):
+            self.attempts[model.idempotency_key] = model
 
     async def commit(self) -> None:
         self.commits += 1
 
     async def refresh(self, model: object) -> None:
+        return None
+
+    async def rollback(self) -> None:
         return None
 
 
@@ -110,6 +119,7 @@ def _pinterest_post(**overrides: object) -> PlatformPost:
             "weddings, office wear, and luxury style."
         ),
         "draft_media_url": "https://cdn.pellevista.example/pinterest-pin.jpg",
+        "scheduled_for": datetime(2026, 7, 9, 13, tzinfo=UTC),
     }
     values.update(overrides)
     return PlatformPost(**values)

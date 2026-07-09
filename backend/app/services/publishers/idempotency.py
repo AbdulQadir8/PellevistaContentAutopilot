@@ -22,6 +22,7 @@ class PublishIdempotencyService:
 
     async def reserve(self, post: PlatformPost) -> PublishReservation:
         scheduled_at = self.scheduled_at_for(post)
+        post.scheduled_for = scheduled_at
         key = self.idempotency_key(
             platform_post_id=self._post_id(post),
             platform=post.platform,
